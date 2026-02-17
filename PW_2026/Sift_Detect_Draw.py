@@ -1,5 +1,5 @@
 import cv2 as cv
-img = cv.imread('query.png')
+img = cv.imread('im1.jpg')
 gray= cv.cvtColor(img,cv.COLOR_BGR2GRAY)
 sift = cv.SIFT_create()
 kp = sift.detect(gray,None)
