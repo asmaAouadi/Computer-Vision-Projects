@@ -104,8 +104,8 @@ if len(image_files) < 2:
 print("\n  Computing SIFT features for all images...")
 sift_scan = cv2.SIFT_create(
     nfeatures         = 8000,
-    contrastThreshold = 0.02,      # More sensitive to subtle features on boxes
-    edgeThreshold     = 10,        # Reduce edge threshold to catch fine details
+    contrastThreshold = 0.012,
+    edgeThreshold     = 12,
     sigma             = 1.6,
 )
 
@@ -222,11 +222,10 @@ print("  ✓  stereo_output/stereo_pair.png")
 print("\n[STEP 4]  SIFT Detection & Matching (refined on best pair)")
 print("─" * 45)
 
-# **TUNED FOR OBJECT DETECTION**: Lower contrast threshold catches small text/patterns on boxes
 sift = cv2.SIFT_create(
     nfeatures         = 8000,
-    contrastThreshold = 0.008,    # LOWER = more sensitive to subtle box features
-    edgeThreshold     = 10,       # Balance to reduce flat background blobs
+    contrastThreshold = 0.012,
+    edgeThreshold     = 12,
     sigma             = 1.6,
 )
 
@@ -293,25 +292,6 @@ cv2.putText(best_pair_vis, best_pair[1],
             (450, 290), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (100, 200, 255), 1)
 cv2.imwrite(str(OUT / "best_pair_selected.png"), best_pair_vis)
 print("  ✓  best_pair_selected.png")
-
-# ── Visualize where SIFT keypoints are detected: helps diagnose background vs object detection
-kp1_debug = cv2.cvtColor(cv2.resize(gray_L, None, fx=0.4, fy=0.4), cv2.COLOR_GRAY2BGR)
-kp2_debug = cv2.cvtColor(cv2.resize(gray_R, None, fx=0.4, fy=0.4), cv2.COLOR_GRAY2BGR)
-
-# Scale keypoint positions to the smaller image
-for kp in kp1[:80]:  
-    x, y = int(kp.pt[0] * 0.4), int(kp.pt[1] * 0.4)
-    size = max(2, int(kp.size * 0.4))
-    cv2.circle(kp1_debug, (x, y), size, (0, 255, 0), 1)
-    
-for kp in kp2[:80]:
-    x, y = int(kp.pt[0] * 0.4), int(kp.pt[1] * 0.4)
-    size = max(2, int(kp.size * 0.4))
-    cv2.circle(kp2_debug, (x, y), size, (0, 255, 0), 1)
-
-cv2.imwrite(str(OUT / "sift_locations_L.png"), kp1_debug)
-cv2.imwrite(str(OUT / "sift_locations_R.png"), kp2_debug)
-print("  ✓  sift_locations_{L,R}.png  (green dots = detected keypoints)")
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  STEP 5 — FUNDAMENTAL & ESSENTIAL MATRIX  +  POSE
@@ -383,75 +363,11 @@ z_cam1 = pts3d[:, 2]
 pts3d_c2 = (R_est @ pts3d.T + t_est).T
 z_cam2   = pts3d_c2[:, 2]
 
-print(f"\n  ┌─ DEBUGGING TRIANGULATION FILTERING ─────────────────┐")
-print(f"  │ Total triangulated points       : {len(pts3d)}")
-print(f"  │ pose_mask True count            : {pose_mask.sum()}")
-print(f"  │ Z_cam1 range                    : [{z_cam1.min():.4f}, {z_cam1.max():.4f}]")
-print(f"  │ Z_cam2 range                    : [{z_cam2.min():.4f}, {z_cam2.max():.4f}]")
-print(f"  └─────────────────────────────────────────────────────┘")
+keep = (pose_mask &
+        (z_cam1 > 0.05) & (z_cam1 < 20.0) &
+        (z_cam2 > 0.05) & (z_cam2 < 20.0))
 
-# ── Create depth histogram visualization ──────────────────────────────────────
-import matplotlib.pyplot as plt
-fig_z, axes_z = plt.subplots(1, 2, figsize=(12, 4), facecolor="#0e0e1a")
-fig_z.suptitle("Depth Distribution of Triangulated Points", 
-               color="white", fontsize=11, fontweight="bold")
-
-# Histogram of Z values
-ax = axes_z[0]
-ax.set_facecolor("#0e0e1a")
-ax.hist(z_cam1, bins=50, color="cyan", alpha=0.7, edgecolor="white", linewidth=0.5)
-ax.axvline(0.05, color="red", linestyle="--", linewidth=2, label="min threshold (0.05)")
-ax.axvline(20.0, color="orange", linestyle="--", linewidth=2, label="max threshold (20.0)")
-ax.set_xlabel("Z depth (cam1)", color="white", fontsize=9)
-ax.set_ylabel("Count", color="white", fontsize=9)
-ax.set_title("Camera 1 Z Distribution", color="white", fontsize=9, fontweight="bold")
-ax.tick_params(colors="white", labelsize=8)
-ax.legend(fontsize=8, labelcolor="white")
-for spine in ax.spines.values():
-    spine.set_edgecolor("white")
-
-# Histogram for cam2
-ax = axes_z[1]
-ax.set_facecolor("#0e0e1a")
-ax.hist(z_cam2, bins=50, color="lime", alpha=0.7, edgecolor="white", linewidth=0.5)
-ax.axvline(0.05, color="red", linestyle="--", linewidth=2, label="min threshold (0.05)")
-ax.axvline(20.0, color="orange", linestyle="--", linewidth=2, label="max threshold (20.0)")
-ax.set_xlabel("Z depth (cam2)", color="white", fontsize=9)
-ax.set_ylabel("Count", color="white", fontsize=9)
-ax.set_title("Camera 2 Z Distribution", color="white", fontsize=9, fontweight="bold")
-ax.tick_params(colors="white", labelsize=8)
-ax.legend(fontsize=8, labelcolor="white")
-for spine in ax.spines.values():
-    spine.set_edgecolor("white")
-
-plt.tight_layout()
-fig_z.savefig(str(OUT / "depth_distribution.png"), dpi=100, bbox_inches="tight", facecolor="#0e0e1a")
-plt.close(fig_z)
-print(f"  ✓  depth_distribution.png")
-print(f"\n  ┌─ DEBUGGING TRIANGULATION FILTERING ─────────────────┐")
-
-# Try progressively relaxed filtering
-keep_pose     = pose_mask
-keep_z1_basic = (z_cam1 > 0.05) & (z_cam1 < 20.0)
-keep_z2_basic = (z_cam2 > 0.05) & (z_cam2 < 20.0)
-keep_z1_relax = (z_cam1 > -5.0) & (z_cam1 < 50.0)  # More permissive
-keep_z2_relax = (z_cam2 > -5.0) & (z_cam2 < 50.0)
-
-# First try strict filtering
-keep = keep_pose & keep_z1_basic & keep_z2_basic
 pts3d_f = pts3d[keep]
-
-# If too few or zero, relax the constraints
-if len(pts3d_f) < 10:
-    print(f"  ! Strict filtering: only {len(pts3d_f)} points. Relaxing constraints...")
-    keep = keep_pose & keep_z1_relax & keep_z2_relax
-    pts3d_f = pts3d[keep]
-    
-    if len(pts3d_f) < 10:
-        print(f"  ! Still only {len(pts3d_f)} points. Trying z > -10 only...")
-        keep = (z_cam1 > -10) & (z_cam2 > -10)
-        pts3d_f = pts3d[keep]
-
 p1_f    = p1_i[keep]
 
 print(f"  Triangulated total  : {len(pts3d)}")

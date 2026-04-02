@@ -25,7 +25,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-OUT   = Path("./Steriovision_Project_1/real_stereo_output");  OUT.mkdir(exist_ok=True)
+OUT   = Path("real_stereo_output");  OUT.mkdir(exist_ok=True)
 DBAR  = "═" * 65
 
 print(DBAR)
@@ -80,117 +80,27 @@ print("""
   ║    DIST = np.load('camera_params/dist.npy')              ║
   ╚══════════════════════════════════════════════════════════╝""")
 
-# Define utility functions early
+# ─────────────────────────────────────────────────────────────────────────────
+#  STEP 2 — LOAD STEREO PAIR
+# ─────────────────────────────────────────────────────────────────────────────
+print("\n[STEP 2]  Load Stereo Images")
+print("─" * 45)
+
+UPLOAD = Path("/mnt/user-data/uploads")
+L_PATH = UPLOAD / "IMG20260402094330.jpg"
+R_PATH = UPLOAD / "IMG20260402094345.jpg"
+
+img_L_raw = cv2.imread(str(L_PATH))
+img_R_raw = cv2.imread(str(R_PATH))
+
+if img_L_raw is None or img_R_raw is None:
+    print("[ERROR] Cannot load images"); sys.exit(1)
+
+# Resize to 2000×1500 if needed (already this size)
 def ensure_size(img, w=2000, h=1500):
-    """Resize image to target dimensions if needed"""
     if img.shape[1] != w or img.shape[0] != h:
         img = cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
     return img
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  STEP 2 — AUTOMATIC STEREO PAIR SELECTION (Scan images2 folder)
-# ─────────────────────────────────────────────────────────────────────────────
-print("\n[STEP 2]  Automatic Stereo Pair Selection")
-print("─" * 45)
-
-UPLOAD = Path("./Steriovision_Project_1/images2")
-image_files = sorted([f for f in UPLOAD.glob("*.jpg") if f.is_file()])
-print(f"  Found {len(image_files)} images in {UPLOAD}")
-
-if len(image_files) < 2:
-    print("[ERROR] Need at least 2 images"); sys.exit(1)
-
-# Load all images and compute SIFT features
-print("\n  Computing SIFT features for all images...")
-sift_scan = cv2.SIFT_create(
-    nfeatures         = 8000,
-    contrastThreshold = 0.02,      # More sensitive to subtle features on boxes
-    edgeThreshold     = 10,        # Reduce edge threshold to catch fine details
-    sigma             = 1.6,
-)
-
-images_data = {}
-for img_path in image_files:
-    img = cv2.imread(str(img_path))
-    if img is None:
-        print(f"    [SKIP] {img_path.name} cannot be read")
-        continue
-    img = ensure_size(img)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    kp, des = sift_scan.detectAndCompute(gray, None)
-    images_data[img_path.name] = {
-        'path': img_path,
-        'image': img,
-        'kp': kp,
-        'des': des,
-        'n_kp': len(kp)
-    }
-    print(f"    {img_path.name:12}  →  {len(kp):5} keypoints")
-
-# Compare all pairs and find the best match count
-print("\n  Comparing all pairs...")
-flann = cv2.FlannBasedMatcher({"algorithm": 1, "trees": 8}, {"checks": 80})
-best_pair = None
-best_matches = 0
-match_results = []
-
-files = list(images_data.keys())
-for i, f1 in enumerate(files):
-    for f2 in files[i+1:]:
-        des1 = images_data[f1]['des']
-        des2 = images_data[f2]['des']
-        kp1 = images_data[f1]['kp']
-        kp2 = images_data[f2]['kp']
-        
-        if des1 is None or des2 is None or len(kp1) < 4 or len(kp2) < 4:
-            match_count = 0
-        else:
-            raw = flann.knnMatch(des1, des2, k=2)
-            
-            # Lowe ratio test
-            ratio_ok = [m for m, n in raw if m.distance < 0.75 * n.distance]
-            
-            # Epipolar pre-filter
-            p1_all = np.float32([kp1[m.queryIdx].pt for m in ratio_ok])
-            p2_all = np.float32([kp2[m.trainIdx].pt for m in ratio_ok])
-            
-            if len(p1_all) > 0:
-                dy_ok = np.abs(p1_all[:, 1] - p2_all[:, 1]) < 50
-                match_count = np.sum(dy_ok)
-            else:
-                match_count = 0
-        
-        match_results.append((f1, f2, match_count))
-        print(f"    {f1} ←→ {f2:12}  :  {match_count:4} matches")
-        
-        if match_count > best_matches:
-            best_matches = match_count
-            best_pair = (f1, f2)
-
-# Select best pair
-if best_pair is None or best_matches < 15:
-    print(f"\n  [WARNING] Best pair has only {best_matches} matches. Using first valid pair.")
-    # Fallback: use first valid pair
-    for f1, f2, cnt in match_results:
-        if cnt > 0:
-            best_pair = (f1, f2)
-            best_matches = cnt
-            break
-
-print(f"\n  ✓ BEST PAIR FOUND:")
-print(f"    {best_pair[0]} ({images_data[best_pair[0]]['n_kp']} kps)")
-print(f"    {best_pair[1]} ({images_data[best_pair[1]]['n_kp']} kps)")
-print(f"    → {best_matches} good matches (after epipolar filter)")
-
-# Use the best pair
-L_PATH = images_data[best_pair[0]]['path']
-R_PATH = images_data[best_pair[1]]['path']
-
-img_L_raw = images_data[best_pair[0]]['image']
-img_R_raw = images_data[best_pair[1]]['image']
-
-if img_L_raw is None or img_R_raw is None:
-    print("[ERROR] Cannot load best pair images"); sys.exit(1)
 
 img_L_raw = ensure_size(img_L_raw)
 img_R_raw = ensure_size(img_R_raw)
@@ -217,16 +127,15 @@ cv2.imwrite(str(OUT / "stereo_pair.png"),
 print("  ✓  stereo_output/stereo_pair.png")
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  STEP 4 — SIFT DETECTION & MATCHING (refined on best pair)
+#  STEP 3 — SIFT DETECTION & MATCHING
 # ─────────────────────────────────────────────────────────────────────────────
-print("\n[STEP 4]  SIFT Detection & Matching (refined on best pair)")
+print("\n[STEP 3]  SIFT Detection & Matching")
 print("─" * 45)
 
-# **TUNED FOR OBJECT DETECTION**: Lower contrast threshold catches small text/patterns on boxes
 sift = cv2.SIFT_create(
     nfeatures         = 8000,
-    contrastThreshold = 0.008,    # LOWER = more sensitive to subtle box features
-    edgeThreshold     = 10,       # Balance to reduce flat background blobs
+    contrastThreshold = 0.012,
+    edgeThreshold     = 12,
     sigma             = 1.6,
 )
 
@@ -279,44 +188,10 @@ cv2.imwrite(str(OUT / "sift_matches.png"),
             cv2.resize(match_vis, None, fx=SCALE, fy=SCALE))
 print("  ✓  keypoints_{left,right}.png  and  sift_matches.png")
 
-# ── Save best pair comparison visualization ────────────────────────────────────
-best_pair_vis = np.hstack([
-    cv2.resize(img_L, (400, 300)),
-    np.full((300, 20, 3), [30, 150, 220], dtype=np.uint8),
-    cv2.resize(img_R, (400, 300)),
-])
-cv2.putText(best_pair_vis, f"Best Pair: {best_matches} matches", 
-            (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
-cv2.putText(best_pair_vis, best_pair[0], 
-            (20, 290), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (100, 200, 255), 1)
-cv2.putText(best_pair_vis, best_pair[1], 
-            (450, 290), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (100, 200, 255), 1)
-cv2.imwrite(str(OUT / "best_pair_selected.png"), best_pair_vis)
-print("  ✓  best_pair_selected.png")
-
-# ── Visualize where SIFT keypoints are detected: helps diagnose background vs object detection
-kp1_debug = cv2.cvtColor(cv2.resize(gray_L, None, fx=0.4, fy=0.4), cv2.COLOR_GRAY2BGR)
-kp2_debug = cv2.cvtColor(cv2.resize(gray_R, None, fx=0.4, fy=0.4), cv2.COLOR_GRAY2BGR)
-
-# Scale keypoint positions to the smaller image
-for kp in kp1[:80]:  
-    x, y = int(kp.pt[0] * 0.4), int(kp.pt[1] * 0.4)
-    size = max(2, int(kp.size * 0.4))
-    cv2.circle(kp1_debug, (x, y), size, (0, 255, 0), 1)
-    
-for kp in kp2[:80]:
-    x, y = int(kp.pt[0] * 0.4), int(kp.pt[1] * 0.4)
-    size = max(2, int(kp.size * 0.4))
-    cv2.circle(kp2_debug, (x, y), size, (0, 255, 0), 1)
-
-cv2.imwrite(str(OUT / "sift_locations_L.png"), kp1_debug)
-cv2.imwrite(str(OUT / "sift_locations_R.png"), kp2_debug)
-print("  ✓  sift_locations_{L,R}.png  (green dots = detected keypoints)")
-
 # ─────────────────────────────────────────────────────────────────────────────
-#  STEP 5 — FUNDAMENTAL & ESSENTIAL MATRIX  +  POSE
+#  STEP 4 — FUNDAMENTAL & ESSENTIAL MATRIX  +  POSE
 # ─────────────────────────────────────────────────────────────────────────────
-print("\n[STEP 5]  Fundamental & Essential Matrix  (RANSAC)")
+print("\n[STEP 4]  Fundamental & Essential Matrix  (RANSAC)")
 print("─" * 45)
 
 F, maskF = cv2.findFundamentalMat(
@@ -363,9 +238,9 @@ cv2.imwrite(str(OUT / "epipolar_lines.png"), epi_img)
 print("\n  ✓  epipolar_lines.png")
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  STEP 6 — 3-D TRIANGULATION
+#  STEP 5 — 3-D TRIANGULATION
 # ─────────────────────────────────────────────────────────────────────────────
-print("\n[STEP 6]  3-D Triangulation")
+print("\n[STEP 5]  3-D Triangulation")
 print("─" * 45)
 
 #  Projection matrices
@@ -383,75 +258,11 @@ z_cam1 = pts3d[:, 2]
 pts3d_c2 = (R_est @ pts3d.T + t_est).T
 z_cam2   = pts3d_c2[:, 2]
 
-print(f"\n  ┌─ DEBUGGING TRIANGULATION FILTERING ─────────────────┐")
-print(f"  │ Total triangulated points       : {len(pts3d)}")
-print(f"  │ pose_mask True count            : {pose_mask.sum()}")
-print(f"  │ Z_cam1 range                    : [{z_cam1.min():.4f}, {z_cam1.max():.4f}]")
-print(f"  │ Z_cam2 range                    : [{z_cam2.min():.4f}, {z_cam2.max():.4f}]")
-print(f"  └─────────────────────────────────────────────────────┘")
+keep = (pose_mask &
+        (z_cam1 > 0.05) & (z_cam1 < 20.0) &
+        (z_cam2 > 0.05) & (z_cam2 < 20.0))
 
-# ── Create depth histogram visualization ──────────────────────────────────────
-import matplotlib.pyplot as plt
-fig_z, axes_z = plt.subplots(1, 2, figsize=(12, 4), facecolor="#0e0e1a")
-fig_z.suptitle("Depth Distribution of Triangulated Points", 
-               color="white", fontsize=11, fontweight="bold")
-
-# Histogram of Z values
-ax = axes_z[0]
-ax.set_facecolor("#0e0e1a")
-ax.hist(z_cam1, bins=50, color="cyan", alpha=0.7, edgecolor="white", linewidth=0.5)
-ax.axvline(0.05, color="red", linestyle="--", linewidth=2, label="min threshold (0.05)")
-ax.axvline(20.0, color="orange", linestyle="--", linewidth=2, label="max threshold (20.0)")
-ax.set_xlabel("Z depth (cam1)", color="white", fontsize=9)
-ax.set_ylabel("Count", color="white", fontsize=9)
-ax.set_title("Camera 1 Z Distribution", color="white", fontsize=9, fontweight="bold")
-ax.tick_params(colors="white", labelsize=8)
-ax.legend(fontsize=8, labelcolor="white")
-for spine in ax.spines.values():
-    spine.set_edgecolor("white")
-
-# Histogram for cam2
-ax = axes_z[1]
-ax.set_facecolor("#0e0e1a")
-ax.hist(z_cam2, bins=50, color="lime", alpha=0.7, edgecolor="white", linewidth=0.5)
-ax.axvline(0.05, color="red", linestyle="--", linewidth=2, label="min threshold (0.05)")
-ax.axvline(20.0, color="orange", linestyle="--", linewidth=2, label="max threshold (20.0)")
-ax.set_xlabel("Z depth (cam2)", color="white", fontsize=9)
-ax.set_ylabel("Count", color="white", fontsize=9)
-ax.set_title("Camera 2 Z Distribution", color="white", fontsize=9, fontweight="bold")
-ax.tick_params(colors="white", labelsize=8)
-ax.legend(fontsize=8, labelcolor="white")
-for spine in ax.spines.values():
-    spine.set_edgecolor("white")
-
-plt.tight_layout()
-fig_z.savefig(str(OUT / "depth_distribution.png"), dpi=100, bbox_inches="tight", facecolor="#0e0e1a")
-plt.close(fig_z)
-print(f"  ✓  depth_distribution.png")
-print(f"\n  ┌─ DEBUGGING TRIANGULATION FILTERING ─────────────────┐")
-
-# Try progressively relaxed filtering
-keep_pose     = pose_mask
-keep_z1_basic = (z_cam1 > 0.05) & (z_cam1 < 20.0)
-keep_z2_basic = (z_cam2 > 0.05) & (z_cam2 < 20.0)
-keep_z1_relax = (z_cam1 > -5.0) & (z_cam1 < 50.0)  # More permissive
-keep_z2_relax = (z_cam2 > -5.0) & (z_cam2 < 50.0)
-
-# First try strict filtering
-keep = keep_pose & keep_z1_basic & keep_z2_basic
 pts3d_f = pts3d[keep]
-
-# If too few or zero, relax the constraints
-if len(pts3d_f) < 10:
-    print(f"  ! Strict filtering: only {len(pts3d_f)} points. Relaxing constraints...")
-    keep = keep_pose & keep_z1_relax & keep_z2_relax
-    pts3d_f = pts3d[keep]
-    
-    if len(pts3d_f) < 10:
-        print(f"  ! Still only {len(pts3d_f)} points. Trying z > -10 only...")
-        keep = (z_cam1 > -10) & (z_cam2 > -10)
-        pts3d_f = pts3d[keep]
-
 p1_f    = p1_i[keep]
 
 print(f"  Triangulated total  : {len(pts3d)}")
@@ -462,7 +273,6 @@ if len(pts3d_f):
     print(f"  Z ∈ [{pts3d_f[:,2].min():.3f},  {pts3d_f[:,2].max():.3f}]")
 
 # Reprojection error
-reproj_err = 0.0
 if len(pts3d_f):
     p1_back = (P1 @ np.vstack([pts3d_f.T, np.ones((1,len(pts3d_f)))])).T
     p1_back = p1_back[:,:2] / p1_back[:,2:3]
@@ -477,9 +287,9 @@ for (u, v) in p1_f:
     colors_rgb.append((r/255., g/255., b/255.))
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  STEP 7 — VISUALIZATION
+#  STEP 6 — VISUALIZATION
 # ─────────────────────────────────────────────────────────────────────────────
-print("\n[STEP 7]  3-D Visualization")
+print("\n[STEP 6]  3-D Visualization")
 print("─" * 45)
 
 DARK = "#0e0e1a"
@@ -568,9 +378,8 @@ print("  ✓  pipeline_summary.png")
 # ── C: Main reconstruction figure ────────────────────────────────────────────
 fig_c = plt.figure(figsize=(22, 9), facecolor=DARK)
 fig_c.suptitle(
-    f"Real-Image Stereo Reconstruction — USTHB Vision Artificielle\n"
-    f"Best Pair: {best_pair[0]} + {best_pair[1]}  ·  "
-    f"{best_matches} matches  ·  {len(pts3d_f)} 3D points",
+    "Real-Image Stereo Reconstruction — USTHB Vision Artificielle\n"
+    "Left: IMG094330  ·  Right: IMG094345  ·  Scene: 3 product boxes",
     color="white", fontsize=12, fontweight="bold")
 
 # Left image
@@ -628,10 +437,9 @@ stats = (
     f"  {'3D pts reconstructed':<20}: {len(pts3d_f)}\n"
     f"  {'Reproj. error':<20}: {reproj_err:.3f} px\n\n"
     f"  Recovered t̂ :\n  {t_est.ravel().round(4)}\n\n"
-    f"  Best stereo pair:\n"
-    f"  {best_pair[0]}\n"
-    f"  {best_pair[1]}\n"
-    f"  ({best_matches} matches)"
+    f"  Stereo pair:\n"
+    f"  IMG094330 (L)\n"
+    f"  IMG094345 (R)"
 )
 ax_s.text(0.05, 0.95, stats, transform=ax_s.transAxes,
           color="lime", fontsize=7.5, fontfamily="monospace",
@@ -649,23 +457,15 @@ print("  ✓  stereo_reconstruction.png")
 print(f"\n{DBAR}")
 print("  RESULTS SUMMARY")
 print(DBAR)
-print(f"  {'Best stereo pair':<28}: {best_pair[0]} + {best_pair[1]}")
-print(f"  {'Matches (best pair)':<28}: {best_matches}")
 print(f"  {'Stereo pair':<28}: IMG094330 + IMG094345")
 print(f"  {'Camera K (estimated)':<28}: fx=fy={FX:.0f}  cx={CX:.0f}  cy={CY:.0f}")
 print(f"  {'SIFT kps  L / R':<28}: {len(kp1)} / {len(kp2)}")
-print(f"  {'Matches (best pair ratio+epi)':<28}: {len(good)}")
+print(f"  {'Matches (ratio+epi)':<28}: {len(good)}")
 print(f"  {'RANSAC inliers':<28}: {inl.sum()}")
 print(f"  {'3D points':<28}: {len(pts3d_f)}")
 print(f"  {'Reprojection error':<28}: {reproj_err:.3f} px")
 print(f"  {'Recovered rotation':<28}: ≈ I  (small angle)")
 print(f"  {'Recovered translation':<28}: {t_est.ravel().round(3)}")
-
-print(f"\n  All image pair comparisons:")
-print("  " + "─" * 42)
-for f1, f2, cnt in sorted(match_results, key=lambda x: x[2], reverse=True):
-    star = "  ← BEST PAIR" if (f1, f2) == best_pair else ""
-    print(f"    {f1:12} ↔ {f2:12} : {cnt:4} matches{star}")
 
 print(f"\n  Output →  ./real_stereo_output/")
 for f in sorted(OUT.iterdir()):
