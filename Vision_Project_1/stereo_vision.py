@@ -31,7 +31,7 @@ from mpl_toolkits.mplot3d import Axes3D   # noqa: F401
 from pathlib import Path
 
 # ─── Output directory ─────────────────────────────────────────────────────────
-OUT = Path("stereo_output")
+OUT = Path("./Vision_Project_1/stereo_output")
 OUT.mkdir(exist_ok=True)
 
 BANNER = "═" * 65
