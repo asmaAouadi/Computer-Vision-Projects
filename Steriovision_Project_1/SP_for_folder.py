@@ -93,7 +93,7 @@ def ensure_size(img, w=2000, h=1500):
 print("\n[STEP 2]  Automatic Stereo Pair Selection")
 print("─" * 45)
 
-UPLOAD = Path("./Steriovision_Project_1/images2")
+UPLOAD = Path("./Steriovision_Project_1/images3")
 image_files = sorted([f for f in UPLOAD.glob("*.jpg") if f.is_file()])
 print(f"  Found {len(image_files)} images in {UPLOAD}")
 
