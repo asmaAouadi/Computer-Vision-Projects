@@ -5,10 +5,6 @@
   Prof. Slimane LARABI
 ═══════════════════════════════════════════════════════════════════════════
 
-Scene  :  Colorful RTX 5050  ·  ASRock B450M/ac R2.0  ·  eMachines PSU
-Stereo :  IMG20260402094330.jpg  (Left)
-          IMG20260402094345.jpg  (Right)   ← auto-selected best pair
-
 Pipeline :
   1. Camera Calibration  → K estimated from image geometry + FOV prior
   2. Load stereo pair    → resize, undistort
