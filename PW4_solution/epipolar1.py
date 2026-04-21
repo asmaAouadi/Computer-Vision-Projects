@@ -6,8 +6,8 @@ from matplotlib import pyplot as plt
 # Reference: https://opencv24-python-tutorials.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_epipolar_geometry/py_epipolar_geometry.html
 
 shrink=0.2
-img1 = cv2.imread('img7.jpg',0)  #queryimage # left image
-img2 = cv2.imread('img8.jpg',0) #trainimage # right image
+img1 = cv2.imread('PW4_solution\img7.jpg',0)  #queryimage # left image
+img2 = cv2.imread('PW4_solution\img8.jpg',0) #trainimage # right image
 img1 = cv2.resize(img1, (0,0), fx=shrink, fy=shrink, interpolation=cv2.INTER_CUBIC)
 img2 = cv2.resize(img2, (0,0), fx=shrink, fy=shrink, interpolation=cv2.INTER_CUBIC)
 sift = cv2.SIFT.create()

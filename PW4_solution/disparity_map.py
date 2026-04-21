@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 shrink=0.2
 
 # Read both images and convert to grayscale
-img1 = cv.imread('img7.jpg', cv.IMREAD_GRAYSCALE)
-img2 = cv.imread('img8.jpg', cv.IMREAD_GRAYSCALE)
+img1 = cv.imread('PW4_solution\img7.jpg', cv.IMREAD_GRAYSCALE)
+img2 = cv.imread('PW4_solution\img8.jpg', cv.IMREAD_GRAYSCALE)
 img1 = cv.resize(img1, (0,0), fx=shrink, fy=shrink, interpolation=cv.INTER_CUBIC)
 img2 = cv.resize(img2, (0,0), fx=shrink, fy=shrink, interpolation=cv.INTER_CUBIC)
 
