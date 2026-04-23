@@ -21,7 +21,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-OUT   = Path("./Steriovision_Project_1/real_stereo_output");  OUT.mkdir(exist_ok=True)
+OUT   = Path("./Steriovision_Project_1/Esp32_realtime_output");  OUT.mkdir(exist_ok=True)
 DBAR  = "═" * 65
 
 print(DBAR)
@@ -89,7 +89,7 @@ def ensure_size(img, w=2000, h=1500):
 print("\n[STEP 2]  Automatic Stereo Pair Selection")
 print("─" * 45)
 
-UPLOAD = Path("./Steriovision_Project_1/images3")
+UPLOAD = Path("./Steriovision_Project_1/captured_frames")
 image_files = sorted([f for f in UPLOAD.glob("*.jpg") if f.is_file()])
 print(f"  Found {len(image_files)} images in {UPLOAD}")
 
